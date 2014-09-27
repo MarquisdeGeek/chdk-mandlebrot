@@ -4,11 +4,13 @@ chdk-mandlebrot
 A mandelbrot set generator, for Canon cameras using the CHDK
 
 
-# Copyright 2014 Steven Goodwin
+Copyright 2014 Steven Goodwin
 
 Released under the GNU GPL, version 2
 
 Version 1.0 - 28th September 2014
+
+# Getting it
 
 ## Binary
 
@@ -26,12 +28,14 @@ When run, it initializes the high level mandelbrot that everyone is used to. Onc
 
 Whilst it is rendering, you may pause with the 'func/set' key.
 
-# Future version
+# Future versions
 
-Scroll around the set
-Zoom out, with history
-Other fractal types
-Optimized renderer
+* Scroll around the set
+* Zoom out, with history
+* Other fractal types
+* Optimized renderer
+* Cursor to be an inverse of the image beneath it
+* More colours
 
 
 
