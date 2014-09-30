@@ -17,7 +17,14 @@ Copyright 2014 Steven Goodwin
 
 Released under the GNU GPL, version 2
 
+Version 1.1 - 30th September 2014
+  + Switch to doubles throughout
+  + Use better starting co-ords that give square pixels
+  + Allow reset to work, if drawing is paused
+  + Invert the cursor square, instead of drawing it black
+
 Version 1.0 - 28th September 2014
+
 */
 void gui_game_menu_kbd_process();
 int  gui_mandelbrot_keyboard();
@@ -57,7 +64,10 @@ static void resetInterface() {
   gState.render_h = camera_screen.height;
 
   gState.cursor_x = gState.cursor_y = 0;
-  gState.cursor_w = gState.cursor_h = 20;
+  
+  // Ensure the cursor is the same ratio as the screen. This maintains 1:1 pixels
+  gState.cursor_h = 20;
+  gState.cursor_w = (gState.cursor_h * gState.render_w) / gState.render_h;
 
   gState.paused = 0;
 }
@@ -71,16 +81,26 @@ static void recompute() {
 static void resetParameters() {
   gState.mode = MODE_RENDER;
   // These co-ords (in imaginary plan) gives us an aspect ratio of 1:1
-  gState.xstart = -2;
-  gState.ystart = -1.5;
-  gState.xend = 1.0;
-  gState.yend = 1.5;
+  gState.xstart = -2.3;
+  gState.ystart = -1.8;
+  gState.xend = 1.3;
+  gState.yend = 1.8;
+
+  // We then rescale the view to match the screen so it's also 1:1
+  gState.ystart = (gState.ystart * gState.render_h / gState.render_w);
+  gState.yend = -gState.ystart;
+
+  gState.render_w = camera_screen.width;
+  gState.render_h = camera_screen.height;
   //
   gState.max_iterations = 32;
   //
   gState.speed = 4;
-
+  //
   recompute();
+  //
+  gState.mode = MODE_RENDER;
+  gState.paused = 0;
 }
 
 static void zoomInHere() {
@@ -100,11 +120,14 @@ static void zoomInHere() {
   gState.max_iterations = (gState.max_iterations * 10) / 8;
   //
   recompute();
+  //
+  gState.mode = MODE_RENDER;
+  gState.paused = 0;
 }
 
-static void draw_mandel_pixel(int sx, int sy) {
-  float x,y;
-  float z,zi,newz,newzi;
+static void draw_mandel_pixel(int sx, int sy, int invert) {
+  double x,y;
+  double z,zi,newz,newzi;
   int inset, iterations;
   int col;
 
@@ -128,29 +151,29 @@ static void draw_mandel_pixel(int sx, int sy) {
       break;
     }
   }
-      //
+  //
   if (inset) {
-    draw_pixel( gState.render_x+sx, gState.render_y+sy, COLOR_BLACK );
+    draw_pixel( gState.render_x+sx, gState.render_y+sy, invert?COLOR_WHITE:COLOR_BLACK );
   } else {
     col = mandle_palette[iterations % sizeof(mandle_palette)/sizeof(mandle_palette[0])];
-    draw_pixel( gState.render_x+sx, gState.render_y+sy, col);
+    draw_pixel( gState.render_x+sx, gState.render_y+sy, invert?~col:col);
   }
 
 }
  
-static void draw_mandel_area(int x, int y) {
+static void draw_mandel_area(int x, int y, int invert) {
   int i, j;
 
   for(j=0;j<gState.cursor_h;++j) {
     for(i=0;i<gState.cursor_w;++i) {
-      draw_mandel_pixel(x+i, y+j);
+      draw_mandel_pixel(x+i, y+j, invert);
     }
   }
 }
 
 
 static void moveCursor(int newX, int newY) {
-  draw_mandel_area(gState.cursor_x, gState.cursor_y);
+  draw_mandel_area(gState.cursor_x, gState.cursor_y, 0);
 
   if (newX >= 0 && newX < gState.render_w) {
     gState.cursor_x = newX;
@@ -159,8 +182,8 @@ static void moveCursor(int newX, int newY) {
   if (newY >= 0 && newY < gState.render_h) {
     gState.cursor_y = newY;
   }
-  // -1 because filled_rect includes the edge; our mandelbrot renderer doesn't
-  draw_filled_rect(gState.cursor_x+gState.render_x, gState.cursor_y+gState.render_y, gState.cursor_x+gState.render_x+gState.cursor_w-1, gState.cursor_y+gState.render_y+gState.cursor_h-1, COLOR_BLUE);
+  
+  draw_mandel_area(gState.cursor_x, gState.cursor_y, 1);
 }
 
 int gui_mandelbrot_keyboard() {
@@ -180,20 +203,25 @@ int gui_mandelbrot_keyboard() {
               break;
           case KEY_SET:
               zoomInHere();
-               gState.mode = MODE_RENDER;
               break;
           case KEY_ERASE:
           case KEY_DISPLAY:
               resetParameters();
-              gState.mode = MODE_RENDER;
               break;
       }
-    } else {  // RENDER
-      if (kbd_get_autoclicked_key() == KEY_SET) {
-        gState.paused = !gState.paused;
-      }
-
+   } else {  // RENDER
+      switch (kbd_get_autoclicked_key()) {
+	case	KEY_SET:      
+	  gState.paused = !gState.paused;
+	  break;
+	case KEY_DISPLAY:
+	  if (gState.paused) {
+	    resetParameters();
+	  }
+	  break;
+	}
     }
+
     return 0;
 }
 
@@ -205,7 +233,7 @@ int i;
 
     for(i=0;i<gState.speed;++i) {
 
-      draw_mandel_area(gState.xscreen, gState.yscreen);
+      draw_mandel_area(gState.xscreen, gState.yscreen, 0);
 
       gState.xscreen += gState.cursor_w;
       if (gState.xscreen >= gState.render_w) {
@@ -239,7 +267,8 @@ int gui_mandelbrot_init() {
 
   draw_filled_rect(0,0,camera_screen.width,camera_screen.height, COLOR_YELLOW);
 
-	gui_set_mode(&GUI_MODE_MANDLEBROT);
+  gui_set_mode(&GUI_MODE_MANDLEBROT);
+  
   return 1;
 }
 
